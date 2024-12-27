@@ -3311,7 +3311,6 @@ namespace Microsoft.PowerShell.Commands
         private readonly List<DnsNameRepresentation> _dnsList = new();
         private readonly System.Globalization.IdnMapping idnMapping = new();
 
-        private const string dnsNamePrefix = "DNS Name=";
         private const string distinguishedNamePrefix = "CN=";
 
         /// <summary>
@@ -3356,37 +3355,15 @@ namespace Microsoft.PowerShell.Commands
                 _dnsList.Add(dnsName);
             }
 
-            foreach (X509Extension extension in cert.Extensions)
+            var subjectAlternativeNameExtension = new X509SubjectAlternativeNameExtension(cert.RawData);
+
+            foreach (string dnsNameEntry in subjectAlternativeNameExtension.EnumerateDnsNames())
             {
-                // Filter to the OID for Subject Alternative Name
-                if (extension.Oid.Value == "2.5.29.17")
+                dnsName = new DnsNameRepresentation(dnsNameEntry);
+
+                if (!_dnsList.Contains(dnsName))
                 {
-                    string[] names = extension.Format(true).Split(Environment.NewLine);
-                    foreach (string nameLine in names)
-                    {
-                        // Get the part after 'DNS Name='
-                        if (nameLine.StartsWith(dnsNamePrefix, System.StringComparison.InvariantCultureIgnoreCase))
-                        {
-                            name = nameLine.Substring(dnsNamePrefix.Length);
-                            try
-                            {
-                                unicodeName = idnMapping.GetUnicode(name);
-                            }
-                            catch (System.ArgumentException)
-                            {
-                                // The name is not valid punyCode, assume it's valid ascii.
-                                unicodeName = name;
-                            }
-
-                            dnsName = new DnsNameRepresentation(name, unicodeName);
-
-                            // Only add the name if it is not the same as an existing name.
-                            if (!_dnsList.Contains(dnsName))
-                            {
-                                _dnsList.Add(dnsName);
-                            }
-                        }
-                    }
+                    _dnsList.Add(dnsName);
                 }
             }
         }
